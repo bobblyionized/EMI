@@ -1,0 +1,9 @@
+{
+  "name": "EMI",
+  "short_name": "EMI",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#1a1a1e",
+  "theme_color": "#1a1a1e",
+  "icons": [{ "src": "assets/emi-avatar.png", "sizes": "512x512", "type": "image/png" }]
+}

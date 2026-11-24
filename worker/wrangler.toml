@@ -1,0 +1,20 @@
+name = "emi-api"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+[vars]
+# Only these sites may call the API from a browser.
+ALLOWED_ORIGINS = "https://bobblyionized.github.io,http://localhost:8080,http://127.0.0.1:8080"
+PASS_ITER = "2000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "emi-db"
+database_id = "4fdcd1b8-d279-4269-b6ab-eeadc0ac3d5b"
+
+[triggers]
+crons = ["17 9 * * *"]
+
+[observability]
+enabled = true
