@@ -181,6 +181,7 @@ function shell() {
       </div>
 
       <footer class="composer-wrap">
+        <div class="cmd-menu" hidden></div>
         <div class="reply-bar" hidden></div>
         <div class="upload-tray" hidden></div>
         <form class="composer" data-composer>
@@ -808,6 +809,96 @@ function pingTyping() {
   if (Date.now() - lastTypingPing > 4000) { lastTypingPing = Date.now(); api.typing(); }
 }
 
+// ------------------------------------------------------------------ slash commands (type "/" for the picker)
+// Same commands as emi's "!" commands; the bot accepts either prefix.
+const COMMANDS = [
+  { name: "help", desc: "Show every command" },
+  { name: "remember", args: "thing", desc: "Save something to emi's memory" },
+  { name: "memories", desc: "See everything emi remembers about you" },
+  { name: "forget", args: "number", desc: "Remove one memory (numbers come from /memories)" },
+  { name: "quiz", args: "topic", opt: "count", desc: "Start practice problems on a topic" },
+  { name: "quiz stop", desc: "End the practice quiz" },
+  { name: "sheet", args: "topic", desc: "Get a formula sheet image" },
+  { name: "grades", desc: "See the grades emi saved" },
+  { name: "birthday", args: "MM-DD", desc: "Tell emi your birthday" },
+  { name: "reset", desc: "Start a fresh conversation (memories stay)" },
+  { name: "forgetall", desc: "Wipe the conversation and every memory", danger: true },
+  { name: "settings", opt: "name on|off", desc: "Turn emi's features on or off" },
+  { name: "prompt", desc: "Get emi's personality file" },
+  { name: "prompt add", args: "line", desc: "Add a line to her personality" },
+  { name: "prompt undo", desc: "Undo the last personality change" },
+  { name: "stats", desc: "Usage for the last 7 days" },
+  { name: "model", desc: "See which AI models emi is using" },
+];
+const cmd = { open: false, list: [], index: 0 };
+
+function argChips(c) {
+  return (c.args ? `<span class="cmd-arg">${esc(c.args)}</span>` : "") + (c.opt ? `<span class="cmd-arg opt">${esc(c.opt)}</span>` : "");
+}
+
+function hideCmdMenu() {
+  const menu = $(".cmd-menu");
+  if (menu) { menu.hidden = true; menu.innerHTML = ""; }
+  cmd.open = false;
+}
+
+function updateCmdMenu(input) {
+  const menu = $(".cmd-menu");
+  const v = input.value;
+  if (!menu || !v.startsWith("/") || v.includes("\n")) return hideCmdMenu();
+  const typed = v.slice(1).toLowerCase();
+  // Once a full command plus a space is typed, show what it expects instead of the list.
+  const exact = [...COMMANDS].sort((a, b) => b.name.length - a.name.length).find((c) => typed.startsWith(c.name + " "));
+  if (exact && (exact.args || exact.opt)) {
+    cmd.open = false;
+    menu.hidden = false;
+    menu.innerHTML = `<div class="cmd-hint">${icon("slash", { size: 16 })}<span class="cmd-name">/${esc(exact.name)}</span>${argChips(exact)}<span class="cmd-desc">${esc(exact.desc)}</span></div>`;
+    return;
+  }
+  if (exact) return hideCmdMenu();
+  cmd.list = COMMANDS.map((c, i) => ({ c, i })).filter(({ c }) => c.name.startsWith(typed) || c.name.split(" ").some((w) => w.startsWith(typed)));
+  if (!cmd.list.length) return hideCmdMenu();
+  cmd.index = Math.min(cmd.index, cmd.list.length - 1);
+  cmd.open = true;
+  menu.hidden = false;
+  menu.innerHTML = `<div class="cmd-head"><span>Commands</span>${typed ? `<span class="cmd-match">matching <strong>/${esc(typed)}</strong></span>` : ""}</div>
+    <div class="cmd-list" role="listbox" aria-label="Commands">${cmd.list.map(({ c, i }, n) => `
+      <button type="button" class="cmd-row ${n === cmd.index ? "on" : ""} ${c.danger ? "danger" : ""}" role="option" aria-selected="${n === cmd.index}" data-cmd="${i}">
+        <img class="cmd-app" src="${EMI.avatar}" alt="">
+        <span class="cmd-main"><span class="cmd-top"><span class="cmd-name">/${esc(c.name)}</span>${argChips(c)}</span><span class="cmd-desc">${esc(c.desc)}</span></span>
+        <span class="cmd-by">${EMI.html}</span>
+      </button>`).join("")}</div>`;
+  menu.querySelector(".cmd-row.on")?.scrollIntoView({ block: "nearest" });
+}
+
+function pickCommand(c, input, form, { sendIfDone }) {
+  const needsMore = c.args || c.opt;
+  input.value = `/${c.name}${needsMore ? " " : ""}`;
+  autoGrow(input);
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  if (!needsMore && sendIfDone) { hideCmdMenu(); form.requestSubmit(); return; }
+  updateCmdMenu(input);
+}
+
+// Returns true when the picker used the key (so the composer shouldn't).
+function cmdKeydown(e, input, form) {
+  if (!cmd.open) return false;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    cmd.index = (cmd.index + (e.key === "ArrowDown" ? 1 : -1) + cmd.list.length) % cmd.list.length;
+    updateCmdMenu(input);
+    return true;
+  }
+  if ((e.key === "Tab" || e.key === "Enter") && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    pickCommand(cmd.list[cmd.index].c, input, form, { sendIfDone: e.key === "Enter" });
+    return true;
+  }
+  if (e.key === "Escape") { e.preventDefault(); hideCmdMenu(); return true; }
+  return false;
+}
+
 // ------------------------------------------------------------------ edit / delete / react / pin
 function startEdit(id) {
   S.editing = id;
@@ -1258,6 +1349,7 @@ function bindShell(app) {
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    hideCmdMenu();
     const text = input.value;
     input.value = "";
     autoGrow(input);
@@ -1265,6 +1357,7 @@ function bindShell(app) {
     if (!isPhone()) input.focus();
   });
   input.addEventListener("keydown", (e) => {
+    if (cmdKeydown(e, input, form)) return;
     const send = settings.enterSends ? e.key === "Enter" && !e.shiftKey && !e.isComposing && !isPhone()
       : e.key === "Enter" && (e.ctrlKey || e.metaKey);
     if (send) { e.preventDefault(); form.requestSubmit(); return; }
@@ -1274,7 +1367,14 @@ function bindShell(app) {
     }
     if (e.key === "Escape" && S.replyTo) setReply(null);
   });
-  input.addEventListener("input", () => { autoGrow(input); if (input.value.trim()) pingTyping(); });
+  input.addEventListener("input", () => { autoGrow(input); updateCmdMenu(input); if (input.value.trim() && !input.value.startsWith("/")) pingTyping(); });
+  input.addEventListener("click", () => updateCmdMenu(input));
+  input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) hideCmdMenu(); }, 150));
+  $(".cmd-menu", app).addEventListener("pointerdown", (e) => e.preventDefault()); // keep focus in the box
+  $(".cmd-menu", app).addEventListener("click", (e) => {
+    const row = e.target.closest("[data-cmd]");
+    if (row) pickCommand(COMMANDS[+row.dataset.cmd], input, form, { sendIfDone: false });
+  });
   input.addEventListener("paste", (e) => {
     const files = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/"));
     if (files.length) { e.preventDefault(); addFiles(files); }

@@ -856,3 +856,34 @@ a.menu-item { text-decoration: none !important; }
 :root[data-theme="sakura"] .chat-header, :root[data-theme="sakura"] .composer-wrap { background: transparent; }
 .set-val { color: var(--text-muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 :root[data-theme="sakura"] .mini-profile.me .pp-name { color: var(--text-strong); }
+
+/* ================================================================ slash command picker */
+.cmd-menu {
+  position: absolute; left: 16px; right: 16px; bottom: calc(100% - 4px); z-index: 6; max-height: min(360px, 55dvh);
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 10px;
+  background: var(--bg-floating); border: 1px solid var(--border-strong); box-shadow: 0 -8px 28px rgba(0, 0, 0, .45);
+  animation: pop .12s ease-out;
+}
+.cmd-head { display: flex; align-items: baseline; gap: 8px; padding: 10px 14px 6px; font-size: .8125rem; font-weight: 600; color: var(--text-muted); flex: none; }
+.cmd-match { font-weight: 400; }
+.cmd-match strong { color: var(--text-strong); font-weight: 600; }
+.cmd-list { overflow-y: auto; padding: 0 6px 6px; }
+.cmd-row { width: 100%; display: flex; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 6px; text-align: left; }
+.cmd-row.on, .cmd-row:hover { background: var(--bg-hover-strong); }
+.cmd-row.on { box-shadow: inset 2px 0 0 var(--brand); }
+.cmd-app { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex: none; }
+.cmd-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.cmd-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cmd-name { font-weight: 600; color: var(--text-strong); font-size: .9375rem; }
+.cmd-row.danger .cmd-name { color: #fa777c; }
+.cmd-arg { padding: 0 6px; border-radius: 4px; background: var(--bg-active); color: var(--text-sub); font-size: .75rem; line-height: 1.5; }
+.cmd-arg.opt { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-muted); }
+.cmd-desc { font-size: .8125rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmd-by { flex: none; font-size: .8125rem; color: var(--text-faint); }
+.cmd-hint { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap; color: var(--text-muted); }
+.cmd-hint .cmd-desc { flex-basis: 100%; padding-left: 24px; white-space: normal; }
+@media (max-width: 767px) {
+  .cmd-menu { left: 8px; right: 8px; }
+  .cmd-by { display: none; }
+  .cmd-row { padding: 9px 8px; }
+}
