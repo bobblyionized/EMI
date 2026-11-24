@@ -10,9 +10,13 @@ const TOKEN_KEY = API.includes("workers.dev") ? "emi.session" : "emi.session.loc
 const MOCK = LOCAL && params.has("mock");
 const M = MOCK ? await import("./mock.js") : null;
 
+// Sign-ins are kept per tab (sessionStorage): a reload stays signed in, but every new tab,
+// window, or fresh launch of the home-screen app asks for the password again.
+try { localStorage.removeItem("emi.session"); localStorage.removeItem("emi.session.local"); } catch {} // old long-lived sign-ins
+
 function readToken() {
   try {
-    const t = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+    const t = JSON.parse(sessionStorage.getItem(TOKEN_KEY) || "null");
     return t && t.exp > Date.now() ? t.token : null;
   } catch {
     return null;
@@ -25,7 +29,7 @@ export const hasSession = () => (M ? true : !!token);
 
 export function signOut() {
   token = null;
-  try { localStorage.removeItem(TOKEN_KEY); } catch {}
+  try { sessionStorage.removeItem(TOKEN_KEY); } catch {}
 }
 
 export class ApiError extends Error {
@@ -73,7 +77,7 @@ const j = async (p) => (await p).json();
 export async function login(password) {
   const data = await j(request("POST", "/api/login", { json: { password } }));
   token = data.token;
-  try { localStorage.setItem(TOKEN_KEY, JSON.stringify(data)); } catch {}
+  try { sessionStorage.setItem(TOKEN_KEY, JSON.stringify(data)); } catch {}
   return data;
 }
 

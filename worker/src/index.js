@@ -10,7 +10,7 @@
 
 const MAX_TEXT = 4000;
 const MAX_FILE = 1_900_000;            // D1 rows are capped at 2 MB
-const SESSION_DAYS = 30;
+const SESSION_DAYS = 1; // the site also drops the sign-in when the tab closes
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILS = 8;
 const STICKERS = new Set(["emi_heart", "emi_lol", "emi_ok", "emi_zzz", "emi_yay", "emi_hm"]);
