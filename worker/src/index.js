@@ -98,6 +98,10 @@ async function route(req, env, url) {
     if (p === "/api/read" && m === "POST") return markRead(req, env);
     if (p === "/api/profile" && m === "POST") return saveProfile(req, env);
     if (p === "/api/files" && m === "POST") return uploadFile(req, env);
+    if (p === "/api/links" && m === "POST") return saveLinks(req, env);
+    if (p === "/api/prefs" && m === "POST") return savePrefs(req, env);
+    if (p === "/api/link-preview" && m === "GET") return linkPreview(url.searchParams.get("url") || "");
+    if (p === "/api/icon" && m === "GET") return iconProxy(url.searchParams.get("url") || "");
     let mm;
     if ((mm = p.match(/^\/api\/files\/(\d+)$/)) && m === "GET") return getFile(env, +mm[1]);
     if ((mm = p.match(/^\/api\/messages\/(\d+)$/))) {
@@ -383,6 +387,133 @@ async function saveProfile(req, env) {
   if (typeof b.note === "string") values.emi_note = b.note.slice(0, 256);
   if (!Object.keys(values).length) throw new HttpError(400, "Nothing to save");
   return setState(env, values);
+}
+
+// ------------------------------------------------------------------ links hub + preferences
+
+function cleanUrl(raw) {
+  let u;
+  try {
+    u = new URL(String(raw || "").trim());
+  } catch {
+    return null;
+  }
+  return /^https?:$/.test(u.protocol) && u.href.length <= 600 ? u : null;
+}
+
+async function saveLinks(req, env) {
+  const b = await body(req);
+  if (!Array.isArray(b.links) || b.links.length > 60) throw new HttpError(400, "Too many links");
+  const links = [];
+  for (const l of b.links) {
+    const u = cleanUrl(l && l.url);
+    if (!u) throw new HttpError(400, "Each link needs a web address starting with http:// or https://");
+    links.push({
+      id: String(l.id || crypto.randomUUID()).slice(0, 40),
+      name: String(l.name || u.hostname).trim().slice(0, 60) || u.hostname,
+      url: u.href,
+      icon: l.icon && cleanUrl(l.icon) ? cleanUrl(l.icon).href : null,
+    });
+  }
+  await setState(env, { links });
+  return json({ links });
+}
+
+const THEMES = new Set(["ash", "midnight", "blackhole", "sakura"]);
+async function savePrefs(req, env) {
+  const b = await body(req);
+  if (!THEMES.has(b.theme)) throw new HttpError(400, "Unknown theme");
+  await setState(env, { theme: b.theme });
+  return json({ ok: true });
+}
+
+const PREVIEW_HEADERS = {
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
+  accept: "text/html,application/xhtml+xml",
+};
+
+function decodeEntities(s) {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/\s+/g, " ").trim();
+}
+
+// Bot checks, errors and sign-in walls aren't real page names.
+const JUNK_TITLE = /^(client challenge|just a moment|attention required|access denied|forbidden|403|404|not found|error|sign in|log ?in|redirecting|please wait|security check|one more step|captcha)\b/i;
+
+// Google apps redirect to a sign-in page (generic "G" logo), so use each app's real logo.
+const GS = "https://www.gstatic.com/images/branding/product/1x/";
+const KNOWN_SITES = [
+  [/^docs\.google\.com\/document/, "Google Docs", `${GS}docs_2020q4_48dp.png`],
+  [/^docs\.google\.com\/presentation/, "Google Slides", `${GS}slides_2020q4_48dp.png`],
+  [/^docs\.google\.com\/spreadsheets/, "Google Sheets", `${GS}sheets_2020q4_48dp.png`],
+  [/^docs\.google\.com\/forms/, "Google Forms", `${GS}forms_2020q4_48dp.png`],
+  [/^classroom\.google\.com/, "Google Classroom", "https://ssl.gstatic.com/classroom/favicon.png"],
+  [/^drive\.google\.com/, "Google Drive", `${GS}drive_2020q4_48dp.png`],
+  [/^mail\.google\.com/, "Gmail", `${GS}gmail_2020q4_48dp.png`],
+  [/^calendar\.google\.com/, "Google Calendar", `${GS}calendar_2020q4_48dp.png`],
+];
+
+async function linkPreview(raw) {
+  const u = cleanUrl(raw);
+  if (!u) throw new HttpError(400, "That doesn't look like a web address.");
+  const key = u.hostname.replace(/^www\./, "") + u.pathname;
+  const known = KNOWN_SITES.find(([re]) => re.test(key));
+  if (known) return json({ title: known[1], icon: known[2], url: u.href });
+  let title = null, icon = null, finalUrl = u.href;
+  try {
+    const res = await fetch(u.href, { headers: PREVIEW_HEADERS, redirect: "follow", signal: AbortSignal.timeout(7000), cf: { cacheTtl: 3600 } });
+    finalUrl = res.url || u.href;
+    if ((res.headers.get("content-type") || "").includes("html")) {
+      const reader = res.body.getReader();
+      let html = "", bytes = 0;
+      while (bytes < 300_000) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.length;
+        html += new TextDecoder().decode(value, { stream: true });
+        if (/<\/head>/i.test(html)) break;
+      }
+      reader.cancel().catch(() => {});
+      const meta = (prop) => {
+        const m = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i"))
+          || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${prop}["']`, "i"));
+        return m ? decodeEntities(m[1]) : "";
+      };
+      const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      // A hub wants the brand ("Khan Academy"), so prefer the site name over the page title.
+      const candidates = [meta("og:site_name"), meta("application-name"), t ? decodeEntities(t[1]) : "", meta("og:title")];
+      title = candidates.find((c) => c && !JUNK_TITLE.test(c)) || null;
+      const links = [...html.matchAll(/<link\b[^>]*>/gi)].map((m) => m[0]);
+      const pick = (re) => {
+        const tag = links.find((l) => re.test(l) && /href=/i.test(l));
+        const href = tag && tag.match(/href=["']([^"']+)["']/i);
+        return href ? new URL(decodeEntities(href[1]), finalUrl).href : null;
+      };
+      icon = pick(/rel=["'][^"']*apple-touch-icon/i) || pick(/rel=["'](?:shortcut )?icon["']/i) || pick(/rel=["'][^"']*icon/i);
+    }
+  } catch {
+    // unreachable or blocked sites still get a usable name below
+  }
+  if (!icon) icon = new URL("/favicon.ico", finalUrl).href;
+  if (!title) {
+    // "www.khanacademy.org" -> "Khanacademy"; "en.wikipedia.org" -> "Wikipedia"
+    const parts = u.hostname.replace(/^www\./, "").split(".");
+    const name = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+    title = name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  return json({ title: title.slice(0, 60), icon, url: u.href });
+}
+
+async function iconProxy(raw) {
+  const u = cleanUrl(raw);
+  if (!u) throw new HttpError(400, "Bad icon address");
+  const res = await fetch(u.href, { headers: { "user-agent": PREVIEW_HEADERS["user-agent"] }, redirect: "follow",
+    signal: AbortSignal.timeout(7000), cf: { cacheTtl: 86400, cacheEverything: true } });
+  const type = (res.headers.get("content-type") || "").split(";")[0];
+  if (!res.ok || !/^image\//.test(type)) throw new HttpError(404, "No icon");
+  const data = await res.arrayBuffer();
+  if (data.byteLength > 400_000) throw new HttpError(413, "Icon too big");
+  return new Response(data, { headers: { "content-type": type, "cache-control": "private, max-age=604800" } });
 }
 
 async function uploadFile(req, env) {

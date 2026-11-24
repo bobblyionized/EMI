@@ -1,9 +1,13 @@
 // Talks to the EMI Cloudflare Worker. The session token lives in this browser only.
-export const API = "https://emi-api.mathbattles.workers.dev";
-const TOKEN_KEY = "emi.session";
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+const params = new URLSearchParams(location.search);
+// Local testing only: ?api=http://127.0.0.1:8787 points at a worker running on this computer.
+export const API = LOCAL && /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(params.get("api") || "")
+  ? params.get("api") : "https://emi-api.mathbattles.workers.dev";
+const TOKEN_KEY = API.includes("workers.dev") ? "emi.session" : "emi.session.local";
 
 // Local design mode: http://localhost:8080/?mock uses fake data, never the real backend.
-const MOCK = ["localhost", "127.0.0.1"].includes(location.hostname) && new URLSearchParams(location.search).has("mock");
+const MOCK = LOCAL && params.has("mock");
 const M = MOCK ? await import("./mock.js") : null;
 
 function readToken() {
@@ -87,6 +91,20 @@ export const typing = () => (M ? M.typing() : request("POST", "/api/typing", { j
 export const markRead = (id) => (M ? M.markRead(id) : request("POST", "/api/read", { json: { id } }).catch(() => {}));
 export const saveProfile = (data) => (M ? M.saveProfile(data) : j(request("POST", "/api/profile", { json: data })));
 export const upload = (blob) => (M ? M.upload(blob) : j(request("POST", "/api/files", { raw: blob, type: blob.type })));
+
+export const saveLinks = (links) => (M ? M.saveLinks(links) : j(request("POST", "/api/links", { json: { links } })));
+export const savePrefs = (prefs) => (M ? M.savePrefs(prefs) : j(request("POST", "/api/prefs", { json: prefs })));
+export const linkPreview = (url) => (M ? M.linkPreview(url) : j(request("GET", `/api/link-preview?url=${encodeURIComponent(url)}`)));
+
+const iconCache = new Map();
+export function iconUrl(url) {
+  if (M) return M.iconUrl(url);
+  if (!iconCache.has(url)) {
+    iconCache.set(url, request("GET", `/api/icon?url=${encodeURIComponent(url)}`).then((r) => r.blob()).then((b) => URL.createObjectURL(b))
+      .catch((e) => { setTimeout(() => iconCache.delete(url), 60000); throw e; }));
+  }
+  return iconCache.get(url);
+}
 
 const fileCache = new Map();
 export function fileUrl(id) {

@@ -126,5 +126,13 @@ export async function fileUrl(f) {
   if (b) return URL.createObjectURL(b);
   throw new Error("missing");
 }
+export async function saveLinks(links) { state.links = links; return { links }; }
+export async function savePrefs(p) { state.theme = p.theme; return { ok: true }; }
+export async function linkPreview(url) {
+  await delay(400);
+  const host = new URL(url).hostname.replace(/^www\./, "");
+  return { title: host.split(".")[0].replace(/^./, (c) => c.toUpperCase()), icon: null, url };
+}
+export async function iconUrl() { throw new Error("no icons in mock mode"); }
 // Simulate emi texting first after a while, to test notifications/unread.
 setTimeout(() => add("emi", "wait did u fall asleep lol", Date.now()), 90000);

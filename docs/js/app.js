@@ -135,15 +135,18 @@ function shell() {
           <span class="sb-dm-text"><span class="sb-dm-name">${EMI.html}</span><span class="sb-dm-status" data-status-text></span></span>
           <span class="badge-count" data-unread hidden></span>
         </button>
+        <div class="sb-heading sb-heading-row"><span>Links</span>
+          <button class="icon-btn sb-add" data-act="link-add" data-tip="Add a link" aria-label="Add a link">${icon("plus", { size: 16 })}</button></div>
+        <div class="sb-links" data-links></div>
       </nav>
       <div class="userpanel">
         <button class="up-me" data-act="me-popout">
           <span class="avatar-wrap sm"><img src="${ME.avatar}" alt=""><i class="status-dot online"></i></span>
           <span class="up-text"><span class="up-name">${ME.html}</span><span class="up-sub">Online</span></span>
         </button>
-        <button class="icon-btn" data-act="dictate" title="Talk to type" aria-label="Talk to type">${icon("mic", { size: 20 })}</button>
-        <button class="icon-btn" data-act="toggle-tts" title="Read emi's messages aloud" aria-label="Read emi's messages aloud">${icon(settings.tts ? "headphones" : "headphonesOff", { size: 20 })}</button>
-        <button class="icon-btn" data-act="settings" title="Settings" aria-label="Settings">${icon("gear", { size: 20 })}</button>
+        <button class="icon-btn" data-act="dictate" data-tip="Talk to type" aria-label="Talk to type">${icon("mic", { size: 20 })}</button>
+        <button class="icon-btn" data-act="toggle-tts" data-tip="Read emi's messages aloud" aria-label="Read emi's messages aloud">${icon(settings.tts ? "headphones" : "headphonesOff", { size: 20 })}</button>
+        <button class="icon-btn" data-act="settings" data-tip="Settings" aria-label="Settings">${icon("gear", { size: 20 })}</button>
       </div>
     </aside>
     <div class="scrim" data-act="close-overlays"></div>
@@ -158,11 +161,10 @@ function shell() {
         </button>
         <span class="badge-count only-narrow" data-unread hidden></span>
         <div class="ch-tools">
-          <button class="icon-btn" data-act="call" title="Start Voice Call" aria-label="Start voice call">${icon("phone")}</button>
-          <button class="icon-btn hide-phone" data-act="pins" title="Pinned Messages" aria-label="Pinned messages">${icon("pin")}</button>
-          <button class="icon-btn" data-act="toggle-profile" data-on-panel="profile" title="Show User Profile" aria-label="Show user profile">${icon("profileToggle")}</button>
+          <button class="icon-btn hide-phone" data-act="pins" data-tip="Pinned Messages" aria-label="Pinned messages">${icon("pin")}</button>
+          <button class="icon-btn" data-act="toggle-profile" data-on-panel="profile" data-tip="Show User Profile" aria-label="Show user profile">${icon("profileToggle")}</button>
           <label class="search-box hide-phone">
-            <input type="search" placeholder="Search ${EMI.username}#${EMI.tag}" data-search aria-label="Search messages">
+            <input type="search" placeholder="Search" data-search aria-label="Search messages">
             <span class="search-ico">${icon("search", { size: 16 })}</span>
           </label>
           <button class="icon-btn only-phone" data-act="open-search" aria-label="Search">${icon("search")}</button>
@@ -188,8 +190,8 @@ function shell() {
             <textarea class="c-input" rows="1" placeholder="Message @${EMI.username}" aria-label="Message emi" data-input enterkeyhint="send"></textarea>
             <div class="c-interim" hidden></div>
           </div>
-          <button type="button" class="icon-btn" data-act="dictate" aria-label="Talk to type" title="Talk to type">${icon("mic")}</button>
-          <button type="button" class="icon-btn" data-act="stickers" aria-label="Send a sticker" title="Stickers">${icon("smile")}</button>
+          <button type="button" class="icon-btn" data-act="dictate" aria-label="Talk to type" data-tip="Talk to type">${icon("mic")}</button>
+          <button type="button" class="icon-btn" data-act="stickers" aria-label="Send a sticker" data-tip="Stickers">${icon("smile")}</button>
           <button type="submit" class="icon-btn c-send" aria-label="Send">${icon("send")}</button>
         </form>
         <div class="typing-line" aria-live="polite"><span class="typing-dots" hidden><i></i><i></i><i></i></span><span data-typing></span></div>
@@ -204,6 +206,174 @@ function shell() {
   bindShell(app);
   refreshPresence();
   renderPanel();
+}
+
+// ------------------------------------------------------------------ links hub (saved in Cloudflare)
+const DEFAULT_LINKS = [
+  { name: "Google Classroom", url: "https://classroom.google.com/", icon: "https://ssl.gstatic.com/classroom/favicon.png" },
+  { name: "Google Docs", url: "https://docs.google.com/document/u/0/", icon: "https://www.gstatic.com/images/branding/product/1x/docs_2020q4_48dp.png" },
+  { name: "Google Slides", url: "https://docs.google.com/presentation/u/0/", icon: "https://www.gstatic.com/images/branding/product/1x/slides_2020q4_48dp.png" },
+];
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()));
+
+function prettyUrl(url) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/u\/\d+\/?$/, "/").replace(/\/$/, "");
+    return u.hostname.replace(/^www\./, "") + (path.length > 1 ? path : "");
+  } catch { return url; }
+}
+
+function letterColor(s) {
+  let n = 0;
+  for (const c of s) n = (n * 31 + c.charCodeAt(0)) >>> 0;
+  return ["#5865f2", "#3ba55c", "#eb459e", "#f0b232", "#ed4245", "#9b59b6", "#1abc9c", "#e67e22"][n % 8];
+}
+
+function linkIcon(l, size = "sm") {
+  const letter = esc((l.name || "?").trim().charAt(0).toUpperCase());
+  return `<span class="avatar-wrap ${size} link-ico" style="--letter-bg:${letterColor(l.name || l.url)}"><span class="link-letter">${letter}</span>
+    ${l.icon ? `<img data-icon-src="${esc(l.icon)}" alt="" hidden>` : ""}</span>`;
+}
+
+function hydrateIcons(scope = document) {
+  $$("img[data-icon-src]", scope).forEach((img) => {
+    api.iconUrl(img.dataset.iconSrc).then((src) => {
+      img.onload = () => { img.hidden = false; img.previousElementSibling?.classList.add("covered"); };
+      img.src = src;
+    }).catch(() => img.remove());
+  });
+}
+
+function renderLinks() {
+  const box = $("[data-links]");
+  if (!box) return;
+  const links = S.links || [];
+  box.innerHTML = links.length ? links.map((l) => `
+    <div class="sb-link" data-link-id="${esc(l.id)}">
+      <a class="sb-dm sb-link-a" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-tip="${esc(l.url)}" data-tip-side="right">
+        ${linkIcon(l)}
+        <span class="sb-dm-text"><span class="sb-dm-name sb-link-name">${esc(l.name)}</span><span class="sb-dm-status">${esc(prettyUrl(l.url))}</span></span>
+      </a>
+      <button class="icon-btn sb-link-more" data-act="link-menu" data-id="${esc(l.id)}" aria-label="Options for ${esc(l.name)}">${icon("dots", { size: 18 })}</button>
+    </div>`).join("")
+    : `<button class="sb-empty" data-act="link-add">${icon("plus", { size: 16 })} Add your first link</button>`;
+  hydrateIcons(box);
+}
+
+async function persistLinks(links, okText) {
+  const before = S.links;
+  S.links = links;
+  renderLinks();
+  try {
+    S.links = (await api.saveLinks(links)).links;
+    S.server.links = S.links;
+    renderLinks();
+    if (okText) toast(okText);
+  } catch (e) {
+    S.links = before;
+    renderLinks();
+    toast(e.message);
+  }
+}
+
+async function seedLinks() {
+  if (Array.isArray(S.server.links)) { S.links = S.server.links; renderLinks(); return; }
+  S.links = DEFAULT_LINKS.map((l) => ({ ...l, id: uid() }));
+  persistLinks(S.links);
+}
+
+function linkMenu(anchor, id) {
+  const l = S.links.find((x) => x.id === id);
+  if (!l) return;
+  popover(anchor, `<div class="menu">
+      <a class="menu-item" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-act="close-layer"><span>Open link</span>${icon("external", { size: 18 })}</a>
+      <button class="menu-item" data-act="link-edit" data-id="${esc(id)}" data-focus="name"><span>Rename</span>${icon("edit", { size: 18 })}</button>
+      <button class="menu-item" data-act="link-edit" data-id="${esc(id)}" data-focus="url"><span>Change link</span>${icon("at", { size: 18 })}</button>
+      <button class="menu-item" data-act="link-copy" data-id="${esc(id)}"><span>Copy link</span>${icon("copy", { size: 18 })}</button>
+      <button class="menu-item" data-act="link-up" data-id="${esc(id)}"><span>Move up</span>${icon("arrowDown", { size: 18 })}</button>
+      <div class="menu-sep"></div>
+      <button class="menu-item danger" data-act="link-delete" data-id="${esc(id)}"><span>Delete link</span>${icon("trash", { size: 18 })}</button>
+    </div>`);
+}
+
+function linkEditor(id = null, focus = "url") {
+  const existing = id ? S.links.find((x) => x.id === id) : null;
+  const draft = existing ? { ...existing } : { id: uid(), name: "", url: "", icon: null };
+  let nameTouched = !!existing;
+  const el = modal(`
+    <button class="icon-btn modal-x" data-close aria-label="Close">${icon("close")}</button>
+    <h2>${existing ? "Edit link" : "Add a link"}</h2>
+    <p>Links open in a new tab and show up for you on every device.</p>
+    <div class="link-preview-card" data-preview></div>
+    <label class="field-label" for="lk-url">Link</label>
+    <input id="lk-url" class="field" type="url" inputmode="url" placeholder="https://" value="${esc(draft.url)}" autocomplete="off" spellcheck="false">
+    <label class="field-label gap" for="lk-name">Name</label>
+    <input id="lk-name" class="field" type="text" maxlength="60" placeholder="Fills in from the site" value="${esc(draft.name)}" autocomplete="off">
+    <p class="field-error" data-err role="alert"></p>`,
+    [{ label: "Cancel" }, { label: existing ? "Save" : "Add link", cls: "btn-brand", keep: true, run: save }], { cls: "modal-link" });
+  $("[data-close]", el).onclick = closeLayer;
+  const urlIn = $("#lk-url", el), nameIn = $("#lk-name", el), err = $("[data-err]", el), prev = $("[data-preview]", el);
+  const paint = () => {
+    prev.innerHTML = `${linkIcon({ ...draft, name: draft.name || prettyUrl(draft.url) || "?" }, "md")}
+      <span class="lp-text"><strong>${esc(draft.name || "New link")}</strong><span>${esc(draft.url ? prettyUrl(draft.url) : "Paste a link below")}</span></span>`;
+    hydrateIcons(prev);
+  };
+  paint();
+  let timer = null, seq = 0;
+  const normalize = (v) => (v && !/^https?:\/\//i.test(v) ? `https://${v}` : v);
+  urlIn.addEventListener("input", () => {
+    err.textContent = "";
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const v = normalize(urlIn.value.trim());
+      try { new URL(v); } catch { return; }
+      draft.url = v;
+      const mine = ++seq;
+      prev.classList.add("loading");
+      try {
+        const p = await api.linkPreview(v);
+        if (mine !== seq) return;
+        draft.icon = p.icon || null;
+        if (!nameTouched) { draft.name = p.title; nameIn.value = p.title; }
+      } catch {}
+      prev.classList.remove("loading");
+      paint();
+    }, 550);
+  });
+  nameIn.addEventListener("input", () => { nameTouched = true; draft.name = nameIn.value; paint(); });
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("input")) { e.preventDefault(); save(); } });
+  setTimeout(() => (focus === "name" ? nameIn : urlIn).focus(), 30);
+
+  async function save() {
+    const v = normalize(urlIn.value.trim());
+    try { new URL(v); } catch { err.textContent = "Enter a web address, like classroom.google.com"; urlIn.focus(); return false; }
+    if (v !== draft.url) {
+      draft.url = v;
+      try { const p = await api.linkPreview(v); draft.icon = p.icon || null; if (!nameTouched) draft.name = p.title; } catch {}
+    }
+    draft.name = (nameIn.value.trim() || draft.name || prettyUrl(v)).slice(0, 60);
+    const links = existing ? S.links.map((x) => (x.id === draft.id ? draft : x)) : [...S.links, draft];
+    closeLayer();
+    persistLinks(links, existing ? "Link saved." : "Link added.");
+    return true;
+  }
+}
+
+// ------------------------------------------------------------------ themes
+const THEMES = [
+  { id: "ash", name: "Ash", sub: "Classic Discord dark" },
+  { id: "midnight", name: "Midnight", sub: "Blue-black, floating panels" },
+  { id: "blackhole", name: "Blackhole", sub: "Pure black, warm glow" },
+  { id: "sakura", name: "Sakura", sub: "Plum night, blossom pink" },
+];
+function applyTheme(id, { save = false } = {}) {
+  if (!THEMES.some((t) => t.id === id)) id = "ash";
+  document.documentElement.dataset.theme = id;
+  try { localStorage.setItem("emi.theme", id); } catch {}
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--bg-chat").trim() || "#1a1a1e";
+  if (save) api.savePrefs({ theme: id }).then(() => { S.server.theme = id; }).catch((e) => toast(e.message));
 }
 
 // ------------------------------------------------------------------ presence, typing, unread
@@ -272,7 +442,7 @@ function reactionsHtml(m) {
     const mine = who.includes("xiaole");
     const face = k.startsWith("emi_") ? `<img src="assets/${k}.png" alt="${STICKER_LABEL[k] || k}">` : `<span class="rx-text">${esc(k)}</span>`;
     const names = who.map((w) => person(w).name).join(", ");
-    return `<button class="rx ${mine ? "mine" : ""}" data-act="toggle-react" data-id="${m.id}" data-key="${esc(k)}" title="${names}" aria-pressed="${mine}">${face}<span class="rx-n">${who.length}</span></button>`;
+    return `<button class="rx ${mine ? "mine" : ""}" data-act="toggle-react" data-id="${m.id}" data-key="${esc(k)}" data-tip="${names}" aria-pressed="${mine}">${face}<span class="rx-n">${who.length}</span></button>`;
   }).join("");
   return `<div class="reactions">${pills}<button class="rx rx-add" data-act="react-picker" data-id="${m.id}" aria-label="Add reaction">${icon("smile", { size: 18 })}</button></div>`;
 }
@@ -293,19 +463,19 @@ function messageHtml(m, cont) {
   const mine = m.author === "xiaole";
   const system = m.author === "system";
   const editable = mine && m.source === "web" && !m.deleted && m.id > 0;
-  const edited = m.edited_at ? `<span class="edited" title="${fullStamp(m.edited_at)}">(edited)</span>` : "";
+  const edited = m.edited_at ? `<span class="edited" data-tip="${fullStamp(m.edited_at)}">(edited)</span>` : "";
   const jumbo = isJumbo(m.text);
   const textHtml = m.deleted ? `<span class="deleted">This message was deleted.</span>`
     : (m.text ? `<div class="msg-text ${jumbo ? "jumbo" : ""}">${md(m.text)} ${edited}</div>` : (edited ? `<div class="msg-text">${edited}</div>` : ""));
-  const head = cont ? `<time class="hover-time" datetime="${new Date(m.created_at).toISOString()}" title="${fullStamp(m.created_at)}">${clock(m.created_at)}</time>`
+  const head = cont ? `<time class="hover-time" datetime="${new Date(m.created_at).toISOString()}" data-tip="${fullStamp(m.created_at)}">${clock(m.created_at)}</time>`
     : `<button class="avatar-btn" data-act="profile-popout" data-who="${p.key}" tabindex="-1" aria-label="${p.key === "emi" ? "emi" : "Xiaole"} profile"><img class="avatar" src="${p.avatar}" alt=""></button>
-       <h3 class="msg-head"><button class="name ${p.key}" data-act="profile-popout" data-who="${p.key}" aria-label="${system ? "emi system" : p.key === "emi" ? "emi" : "Xiaole"}, open profile">${system ? "emi system" : p.html}</button>${p.key === "emi" ? `<span class="badge-app">APP</span>` : ""}
-       <time datetime="${new Date(m.created_at).toISOString()}" title="${fullStamp(m.created_at)}">${stamp(m.created_at)}</time></h3>`;
+       <h3 class="msg-head"><button class="name ${p.key}" data-act="profile-popout" data-who="${p.key}" aria-label="${system ? "emi system" : p.key === "emi" ? "emi" : "Xiaole"}, open profile">${system ? "emi system" : p.html}</button>
+       <time datetime="${new Date(m.created_at).toISOString()}" data-tip="${fullStamp(m.created_at)}">${stamp(m.created_at)}</time></h3>`;
   const tools = m.deleted || m.id < 0 ? "" : `<div class="msg-tools" role="toolbar">
-      <button class="icon-btn" data-act="react-picker" data-id="${m.id}" title="Add Reaction" aria-label="Add reaction">${icon("smile", { size: 20 })}</button>
-      <button class="icon-btn" data-act="reply" data-id="${m.id}" title="Reply" aria-label="Reply">${icon("reply", { size: 20 })}</button>
-      ${editable ? `<button class="icon-btn" data-act="edit" data-id="${m.id}" title="Edit" aria-label="Edit">${icon("edit", { size: 20 })}</button>` : ""}
-      <button class="icon-btn" data-act="more" data-id="${m.id}" title="More" aria-label="More">${icon("dots", { size: 20 })}</button></div>`;
+      <button class="icon-btn" data-act="react-picker" data-id="${m.id}" data-tip="Add Reaction" aria-label="Add reaction">${icon("smile", { size: 20 })}</button>
+      <button class="icon-btn" data-act="reply" data-id="${m.id}" data-tip="Reply" aria-label="Reply">${icon("reply", { size: 20 })}</button>
+      ${editable ? `<button class="icon-btn" data-act="edit" data-id="${m.id}" data-tip="Edit" aria-label="Edit">${icon("edit", { size: 20 })}</button>` : ""}
+      <button class="icon-btn" data-act="more" data-id="${m.id}" data-tip="More" aria-label="More">${icon("dots", { size: 20 })}</button></div>`;
   const editor = S.editing === m.id ? `<div class="edit-box"><textarea class="edit-input" data-edit-input>${esc(m.text)}</textarea>
       <div class="edit-hint">escape to <button data-act="cancel-edit">cancel</button> • enter to <button data-act="save-edit">save</button></div></div>` : "";
   return `<article class="msg ${cont ? "cont" : "head"} ${m.reply ? "has-reply" : ""} ${mine ? "mine" : ""} ${system ? "system" : ""} ${!m.delivered ? "pending" : ""} ${m.pinned ? "pinned" : ""}" data-id="${m.id}" id="m${m.id}">
@@ -327,7 +497,7 @@ function renderMessages({ keepBottomOffset = false } = {}) {
   if (!S.hasOlder) {
     html += `<div class="welcome">
       <span class="avatar-wrap xl"><img src="${EMI.avatar}" alt=""></span>
-      <h2>${EMI.html}</h2><p class="welcome-user">${EMI.userHtml}#${EMI.tag}</p>
+      <h2>${EMI.html}</h2><p class="welcome-user">${EMI.userHtml}</p>
       <p>This is the beginning of your direct message history with <strong>${EMI.html}</strong>.</p></div>`;
   } else {
     html += `<div class="loading-older"><span class="spinner"></span></div>`;
@@ -398,7 +568,9 @@ async function boot() {
     const firstNew = sorted().find((m) => m.id > S.lastReadId && m.author !== "xiaole");
     S.dividerId = S.lastReadId && firstNew ? firstNew.id : null;
     S.booted = true;
+    if (S.server.theme && S.server.theme !== document.documentElement.dataset.theme) applyTheme(S.server.theme);
     shell();
+    seedLinks();
     renderMessages();
     if (S.dividerId) {
       const el = document.getElementById(`m${S.dividerId}`);
@@ -471,15 +643,12 @@ function onNewMessages(fresh) {
       n.onclick = () => { window.focus(); n.close(); };
     } catch {}
   }
-  if (settings.tts || S.call) for (const m of fromEmi) if (m.text && m.author === "emi") speakEmi(m.text);
+  if (settings.tts) for (const m of fromEmi) if (m.text && m.author === "emi") speakEmi(m.text);
   maybeMarkRead();
 }
 
 function speakEmi(text) {
-  S.call?.listener?.pause();
-  voice.speak(text, { voice: settings.voice, rate: settings.rate, pitch: settings.pitch }).then(() => {
-    if (S.call && !window.speechSynthesis?.speaking) S.call.listener?.resume();
-  });
+  voice.speak(text, { voice: settings.voice, rate: settings.rate, pitch: settings.pitch });
 }
 
 let readTimer = null;
@@ -700,7 +869,8 @@ function popover(anchor, html, { align = "right", cls = "" } = {}) {
   const pop = h(`<div class="popover ${cls}" role="dialog">${html}</div>`);
   layer.append(h(`<div class="layer-scrim" data-act="close-layer"></div>`), pop);
   if (isPhone()) { pop.classList.add("sheet"); return pop; }
-  const r = anchor.getBoundingClientRect();
+  const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect()
+    : { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y }; // a mouse position (right-click)
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
   let left = align === "right" ? r.right - pw : r.left;
   let top = r.bottom + 6;
@@ -713,7 +883,7 @@ function popover(anchor, html, { align = "right", cls = "" } = {}) {
 
 function stickerGrid(act, id = "") {
   return `<div class="sticker-head">${act === "send-sticker" ? "Send a sticker" : "React with"}</div><div class="sticker-grid">` + STICKERS.map((s) =>
-    `<button class="sticker-opt" data-act="${act}" data-key="${s}" data-id="${id}" title="${STICKER_LABEL[s]}"><img src="assets/${s}.png" alt="${STICKER_LABEL[s]}"></button>`).join("") + "</div>";
+    `<button class="sticker-opt" data-act="${act}" data-key="${s}" data-id="${id}" data-tip="${STICKER_LABEL[s]}"><img src="assets/${s}.png" alt="${STICKER_LABEL[s]}"></button>`).join("") + "</div>";
 }
 
 function moreMenu(anchor, id) {
@@ -744,6 +914,7 @@ function modal(inner, buttons = [], { cls = "" } = {}) {
     const b = e.target.closest(".modal-foot [data-i]");
     if (!b) return;
     const spec = buttons[+b.dataset.i];
+    if (spec.keep) { await spec.run?.(); return; }  // the action closes the dialog itself when it succeeds
     closeLayer();
     await spec.run?.();
   });
@@ -765,11 +936,11 @@ function profileCard(full = false) {
     <div class="pp-banner" style="background-image:url('${EMI.banner}')"></div>
     <div class="pp-head">
       <span class="avatar-wrap lg ring"><img src="${EMI.avatar}" alt=""><i class="status-dot ${presence()}"></i></span>
-      <div class="pp-status-bubble" title="Status">${esc(statusText())}</div>
+      <div class="pp-status-bubble" data-tip="Status">${esc(statusText())}</div>
     </div>
     <div class="pp-card">
-      <div class="pp-name">${EMI.html} <span class="badge-app">APP</span></div>
-      <div class="pp-user">${EMI.userHtml}#${EMI.tag}</div>
+      <div class="pp-name">${EMI.html}</div>
+      <div class="pp-user">${EMI.userHtml}</div>
       <div class="pp-mutual">${icon("person", { size: 14 })} 1 Mutual Server</div>
       <div class="pp-section"><div class="pp-bio">${md(EMI.bio)}</div></div>
       <div class="pp-section"><h4>Created On</h4><p>${created}</p></div>
@@ -866,61 +1037,160 @@ function fullProfile() {
 }
 
 // ------------------------------------------------------------------ settings
+// ------------------------------------------------------------------ custom controls (no native widgets)
+function switchHtml(key, on) {
+  return `<button type="button" class="switch" role="switch" aria-checked="${!!on}" data-set="${key}">
+    <span class="switch-knob">${icon(on ? "check" : "close", { size: 12 })}</span></button>`;
+}
+
+function sliderHtml(key, { min, max, step, value, label }) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return `<div class="slider" role="slider" tabindex="0" aria-label="${label}" aria-valuemin="${min}" aria-valuemax="${max}"
+      aria-valuenow="${value}" data-slider="${key}" data-min="${min}" data-max="${max}" data-step="${step}" style="--pct:${pct}%">
+      <span class="slider-track"><span class="slider-fill"></span></span>
+      <span class="slider-thumb"><span class="slider-bubble"></span></span>
+      <span class="slider-ticks">${[0, 25, 50, 75, 100].map((p) => `<i style="left:${p}%"></i>`).join("")}</span></div>`;
+}
+
+function bindSliders(scope, fmt, onChange) {
+  $$("[data-slider]", scope).forEach((s) => {
+    const min = +s.dataset.min, max = +s.dataset.max, step = +s.dataset.step, key = s.dataset.slider;
+    const bubble = $(".slider-bubble", s);
+    const set = (v) => {
+      v = Math.min(max, Math.max(min, Math.round(v / step) * step));
+      v = +v.toFixed(2);
+      s.style.setProperty("--pct", `${((v - min) / (max - min)) * 100}%`);
+      s.setAttribute("aria-valuenow", v);
+      s.setAttribute("aria-valuetext", fmt(key, v));
+      bubble.textContent = fmt(key, v);
+      const out = $(`[data-slider-out="${key}"]`, scope);
+      if (out) out.textContent = fmt(key, v);
+      onChange(key, v);
+    };
+    set(+s.getAttribute("aria-valuenow"));
+    const fromX = (x) => { const r = $(".slider-track", s).getBoundingClientRect(); set(min + ((x - r.left) / r.width) * (max - min)); };
+    s.addEventListener("pointerdown", (e) => {
+      s.setPointerCapture(e.pointerId);
+      s.classList.add("dragging");
+      fromX(e.clientX);
+      const move = (ev) => fromX(ev.clientX);
+      const up = () => { s.classList.remove("dragging"); s.removeEventListener("pointermove", move); s.removeEventListener("pointerup", up); };
+      s.addEventListener("pointermove", move);
+      s.addEventListener("pointerup", up);
+    });
+    s.addEventListener("keydown", (e) => {
+      const v = +s.getAttribute("aria-valuenow");
+      const d = { ArrowRight: step, ArrowUp: step, ArrowLeft: -step, ArrowDown: -step, PageUp: step * 3, PageDown: -step * 3 }[e.key];
+      if (d) { e.preventDefault(); set(v + d); }
+      if (e.key === "Home") { e.preventDefault(); set(min); }
+      if (e.key === "End") { e.preventDefault(); set(max); }
+    });
+  });
+}
+
+function selectHtml(key, options, value) {
+  const cur = options.find((o) => o.value === value) || options[0];
+  return `<div class="cselect" data-cselect="${key}">
+      <button type="button" class="cselect-btn" aria-haspopup="listbox" aria-expanded="false">
+        <span class="cselect-value">${esc(cur.label)}</span>${icon("arrowDown", { size: 16 })}</button>
+      <div class="cselect-list" role="listbox" hidden>${options.map((o) => `
+        <button type="button" role="option" class="cselect-opt" data-value="${esc(o.value)}" aria-selected="${o.value === cur.value}">
+          <span>${esc(o.label)}</span>${o.value === cur.value ? icon("check", { size: 16 }) : ""}</button>`).join("")}</div></div>`;
+}
+
+function bindSelects(scope, onChange) {
+  $$("[data-cselect]", scope).forEach((box) => {
+    const btn = $(".cselect-btn", box), list = $(".cselect-list", box);
+    const close = () => { list.hidden = true; btn.setAttribute("aria-expanded", "false"); box.classList.remove("open"); };
+    const open = () => {
+      list.hidden = false; btn.setAttribute("aria-expanded", "true"); box.classList.add("open");
+      ($('[aria-selected="true"]', list) || $(".cselect-opt", list))?.focus();
+    };
+    btn.addEventListener("click", () => (list.hidden ? open() : close()));
+    list.addEventListener("click", (e) => {
+      const o = e.target.closest(".cselect-opt");
+      if (!o) return;
+      $$(".cselect-opt", list).forEach((x) => {
+        const on = x === o;
+        x.setAttribute("aria-selected", on);
+        x.innerHTML = `<span>${x.querySelector("span").innerHTML}</span>${on ? icon("check", { size: 16 }) : ""}`;
+      });
+      $(".cselect-value", box).textContent = o.textContent.trim();
+      close();
+      btn.focus();
+      onChange(box.dataset.cselect, o.dataset.value);
+    });
+    list.addEventListener("keydown", (e) => {
+      const opts = $$(".cselect-opt", list), i = opts.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); opts[Math.min(opts.length - 1, i + 1)].focus(); }
+      if (e.key === "ArrowUp") { e.preventDefault(); opts[Math.max(0, i - 1)].focus(); }
+      if (e.key === "Escape") { e.stopPropagation(); close(); btn.focus(); }
+    });
+    document.addEventListener("click", (e) => { if (!box.contains(e.target)) close(); }, { capture: true });
+  });
+}
+
 function settingsModal() {
   const voices = voice.listVoices();
-  const toggle = (key, label, sub = "") => `<label class="set-row"><span><span class="set-label">${label}</span>${sub ? `<span class="set-sub">${sub}</span>` : ""}</span>
-      <input type="checkbox" class="switch" data-set="${key}" ${settings[key] ? "checked" : ""}></label>`;
+  const row = (key, label, sub = "") => `<div class="set-row"><span><span class="set-label">${label}</span>${sub ? `<span class="set-sub">${sub}</span>` : ""}</span>${switchHtml(key, settings[key])}</div>`;
+  const current = document.documentElement.dataset.theme || "ash";
+  const themeCards = THEMES.map((t) => `
+    <button type="button" class="theme-card" role="radio" aria-checked="${t.id === current}" data-act="pick-theme" data-theme="${t.id}">
+      <span class="theme-mini" data-theme-preview="${t.id}" aria-hidden="true">
+        <span class="tm-side"><i></i><i></i><i></i></span>
+        <span class="tm-chat"><i class="tm-a"></i><i class="tm-b"></i><i class="tm-c"></i><i class="tm-input"></i></span>
+      </span>
+      <span class="theme-name">${t.name}</span><span class="theme-sub">${t.sub}</span>
+      <span class="theme-check">${icon("check", { size: 14 })}</span>
+    </button>`).join("");
   const el = modal(`
     <button class="icon-btn modal-x" data-close aria-label="Close">${icon("close")}</button>
     <h2>Settings</h2>
+    <section class="set-group"><h3>Theme</h3><div class="theme-grid" role="radiogroup" aria-label="Theme">${themeCards}</div></section>
     <section class="set-group"><h3>Voice</h3>
-      ${voice.canSpeak ? toggle("tts", "Read emi's messages aloud", "New messages from emi are spoken as they arrive.") : `<p class="set-sub">This browser can't speak text.</p>`}
-      ${voice.canSpeak ? `<label class="set-row col"><span class="set-label">Her voice</span>
-        <select class="field" data-set-voice><option value="">Automatic</option>${voices.map((v) => `<option ${v.name === settings.voice ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select></label>
-      <label class="set-row col"><span class="set-label">Speed <output data-out="rate">${settings.rate.toFixed(1)}x</output></span><input type="range" min="0.6" max="1.6" step="0.1" value="${settings.rate}" data-range="rate"></label>
-      <label class="set-row col"><span class="set-label">Pitch <output data-out="pitch">${settings.pitch.toFixed(1)}</output></span><input type="range" min="0.6" max="1.6" step="0.1" value="${settings.pitch}" data-range="pitch"></label>
+      ${voice.canSpeak ? row("tts", "Read emi's messages aloud", "New messages from emi are spoken as they arrive.") : `<p class="set-sub">This browser can't speak text.</p>`}
+      ${voice.canSpeak ? `<div class="set-row col"><span class="set-label">Her voice</span>
+        ${selectHtml("voice", [{ value: "", label: "Automatic" }, ...voices.map((v) => ({ value: v.name, label: v.name }))], settings.voice)}</div>
+      <div class="set-row col"><span class="set-label">Speed <span class="set-val" data-slider-out="rate"></span></span>${sliderHtml("rate", { min: 0.6, max: 1.6, step: 0.1, value: settings.rate, label: "Speed" })}</div>
+      <div class="set-row col"><span class="set-label">Pitch <span class="set-val" data-slider-out="pitch"></span></span>${sliderHtml("pitch", { min: 0.6, max: 1.6, step: 0.1, value: settings.pitch, label: "Pitch" })}</div>
       <button class="btn btn-secondary btn-small" data-test-voice>${icon("speaker", { size: 16 })} Test voice</button>` : ""}
-      <p class="set-sub">${voice.canListen ? "Talk to type and voice calls use your browser's speech recognition." : "Talk to type isn't supported in this browser. Try Chrome, Edge, or Safari."}</p>
+      <p class="set-sub">${voice.canListen ? "Talk to type uses your browser's speech recognition." : "Talk to type isn't supported in this browser. Try Chrome, Edge, or Safari."}</p>
     </section>
     <section class="set-group"><h3>Notifications</h3>
-      ${toggle("notify", "Desktop notifications", "Get notified when emi texts and EMI isn't open.")}
-      ${toggle("sound", "Message sound", "A soft ping for new messages.")}
+      ${row("notify", "Desktop notifications", "Get notified when emi texts and EMI isn't open.")}
+      ${row("sound", "Message sound", "A soft ping for new messages.")}
     </section>
     <section class="set-group"><h3>Chat</h3>
-      ${toggle("enterSends", "Enter sends the message", "Turn off to use Enter for new lines (Ctrl+Enter sends).")}
-      <label class="set-row col"><span class="set-label">Text size</span>
-        <span class="seg">${[[0.9, "Small"], [1, "Default"], [1.12, "Large"], [1.25, "Huge"]].map(([v, l]) => `<button class="seg-btn ${settings.fontScale === v ? "on" : ""}" data-font="${v}">${l}</button>`).join("")}</span></label>
+      ${row("enterSends", "Enter sends the message", "Turn off to use Enter for new lines (Ctrl+Enter sends).")}
+      <div class="set-row col"><span class="set-label">Text size</span>
+        <span class="seg" role="radiogroup" aria-label="Text size">${[[0.9, "Small"], [1, "Default"], [1.12, "Large"], [1.25, "Huge"]].map(([v, l]) =>
+          `<button type="button" role="radio" aria-checked="${settings.fontScale === v}" class="seg-btn ${settings.fontScale === v ? "on" : ""}" data-font="${v}">${l}</button>`).join("")}</span></div>
     </section>
     <section class="set-group"><h3>Account</h3>
-      <button class="btn btn-danger btn-small" data-logout>${icon("logout", { size: 16 })} Log Out</button>
+      <button class="btn btn-danger btn-small" data-logout>${icon("logout", { size: 16 })} Log out</button>
     </section>`, [], { cls: "modal-settings" });
   $("[data-close]", el).onclick = closeLayer;
-  el.addEventListener("change", async (e) => {
-    const t = e.target;
-    if (t.dataset.set) {
-      settings[t.dataset.set] = t.checked;
-      if (t.dataset.set === "notify" && t.checked && "Notification" in window && Notification.permission !== "granted") {
-        const p = await Notification.requestPermission();
-        if (p !== "granted") { settings.notify = false; t.checked = false; toast("Notifications are blocked in your browser settings."); }
+  bindSliders(el, (k, v) => (k === "rate" ? `${v.toFixed(1)}x` : v.toFixed(1)), (k, v) => { settings[k] = v; saveSettings(); });
+  bindSelects(el, (k, v) => { settings[k] = v; saveSettings(); });
+  el.addEventListener("click", async (e) => {
+    const sw = e.target.closest(".switch");
+    if (sw) {
+      const key = sw.dataset.set;
+      let on = sw.getAttribute("aria-checked") !== "true";
+      if (key === "notify" && on && "Notification" in window && Notification.permission !== "granted") {
+        if ((await Notification.requestPermission()) !== "granted") { on = false; toast("Notifications are blocked in your browser settings."); }
       }
-      if (t.dataset.set === "tts") syncTtsButton();
+      settings[key] = on;
+      sw.setAttribute("aria-checked", on);
+      $(".switch-knob", sw).innerHTML = icon(on ? "check" : "close", { size: 12 });
+      if (key === "tts") syncTtsButton();
       saveSettings();
     }
-    if (t.matches("[data-set-voice]")) { settings.voice = t.value; saveSettings(); }
-  });
-  el.addEventListener("input", (e) => {
-    const k = e.target.dataset.range;
-    if (!k) return;
-    settings[k] = parseFloat(e.target.value);
-    $(`[data-out="${k}"]`, el).textContent = k === "rate" ? `${settings[k].toFixed(1)}x` : settings[k].toFixed(1);
-    saveSettings();
-  });
-  el.addEventListener("click", (e) => {
     const f = e.target.closest("[data-font]");
     if (f) {
       settings.fontScale = parseFloat(f.dataset.font);
       document.documentElement.style.setProperty("--font-scale", settings.fontScale);
-      $$("[data-font]", el).forEach((b) => b.classList.toggle("on", b === f));
+      $$("[data-font]", el).forEach((b) => { b.classList.toggle("on", b === f); b.setAttribute("aria-checked", b === f); });
       saveSettings();
     }
     if (e.target.closest("[data-test-voice]")) voice.speak("hiii xiaole, this is how i sound, um, is it okay?", settings);
@@ -951,71 +1221,6 @@ function toggleDictation() {
     onError: toast,
   });
   dictation.start();
-}
-
-function startCall() {
-  if (!voice.canListen || !voice.canSpeak) return toast("Voice calls need speech support. Try Chrome, Edge, or Safari.");
-  if (S.call) return;
-  const layer = $("#layer");
-  closeLayer();
-  const el = h(`<div class="call" role="dialog" aria-label="Voice call with emi">
-      <div class="call-top"><span class="call-title">${icon("phone", { size: 16 })} ${EMI.html}</span><span class="call-time" data-call-time>0:00</span></div>
-      <div class="call-stage">
-        <div class="call-user" data-call-emi><span class="call-ring"></span><img src="${EMI.avatar}" alt=""><span class="call-name">${EMI.html}</span></div>
-        <div class="call-user" data-call-me><span class="call-ring"></span><img src="${ME.avatar}" alt=""><span class="call-name">${ME.html}</span></div>
-      </div>
-      <p class="call-caption" data-call-caption>Say something, emi is listening…</p>
-      <div class="call-controls">
-        <button class="call-btn" data-call-mute aria-label="Mute">${icon("mic", { size: 24 })}</button>
-        <button class="call-btn end" data-call-end aria-label="Leave call">${icon("phoneOff", { size: 26 })}</button>
-      </div></div>`);
-  layer.append(el);
-  const caption = $("[data-call-caption]", el);
-  const started = Date.now();
-  const timer = setInterval(() => {
-    const s = Math.floor((Date.now() - started) / 1000);
-    $("[data-call-time]", el).textContent = `${Math.floor(s / 60)}:${pad(s % 60)}`;
-  }, 1000);
-  let buffer = "", sendTimer = null;
-  const listener = voice.createListener({
-    continuous: true,
-    onInterim: (t) => { if (t) { caption.textContent = t; el.querySelector("[data-call-me]").classList.add("speaking"); } },
-    onFinal: (t) => {
-      buffer = (buffer + " " + t).trim();
-      caption.textContent = buffer;
-      clearTimeout(sendTimer);
-      sendTimer = setTimeout(() => {
-        el.querySelector("[data-call-me]").classList.remove("speaking");
-        if (buffer) { sendMessage({ text: buffer }); caption.textContent = "emi is thinking…"; buffer = ""; }
-      }, 1400);
-    },
-    onError: (msg) => { toast(msg); end(); },
-  });
-  S.call = { listener, el };
-  const offSpeak = (speaking) => {
-    if (!S.call) return;
-    el.querySelector("[data-call-emi]").classList.toggle("speaking", speaking);
-    if (speaking) caption.textContent = "emi is talking…";
-  };
-  voice.onSpeakingChange(offSpeak);
-  listener.start();
-  let muted = false;
-  $("[data-call-mute]", el).onclick = (e) => {
-    muted = !muted;
-    e.currentTarget.innerHTML = icon(muted ? "micOff" : "mic", { size: 24 });
-    e.currentTarget.classList.toggle("on", muted);
-    muted ? listener.pause() : listener.resume();
-    caption.textContent = muted ? "You're muted" : "Listening…";
-  };
-  const end = () => {
-    clearInterval(timer);
-    clearTimeout(sendTimer);
-    listener.stop();
-    voice.stopSpeaking();
-    el.remove();
-    S.call = null;
-  };
-  $("[data-call-end]", el).onclick = end;
 }
 
 // ------------------------------------------------------------------ sound
@@ -1122,7 +1327,6 @@ function bindShell(app) {
         break;
       case "pins": showPins(el); break;
       case "pins-menu": showPins($(".ch-tools")); break;
-      case "call": startCall(); break;
       case "settings": closeLayer(); app.classList.remove("sidebar-open"); settingsModal(); break;
       case "toggle-tts":
         if (!voice.canSpeak) { toast("This browser can't speak text."); break; }
@@ -1132,6 +1336,29 @@ function bindShell(app) {
         break;
       case "dictate": toggleDictation(); break;
       case "me-popout": profilePopout(el, "xiaole"); break;
+      case "link-add": closeLayer(); linkEditor(); break;
+      case "link-menu": e.preventDefault(); linkMenu(el, el.dataset.id); break;
+      case "link-edit": closeLayer(); linkEditor(el.dataset.id, el.dataset.focus); break;
+      case "link-copy": {
+        closeLayer();
+        const l = S.links.find((x) => x.id === el.dataset.id);
+        navigator.clipboard?.writeText(l?.url || "").then(() => toast("Link copied."));
+        break;
+      }
+      case "link-up": {
+        closeLayer();
+        const i = S.links.findIndex((x) => x.id === el.dataset.id);
+        if (i > 0) { const next = [...S.links]; [next[i - 1], next[i]] = [next[i], next[i - 1]]; persistLinks(next); }
+        break;
+      }
+      case "link-delete": {
+        closeLayer();
+        const l = S.links.find((x) => x.id === el.dataset.id);
+        modal(`<h2>Delete link</h2><p>Remove <strong>${esc(l.name)}</strong> from your links? You can add it again any time.</p>`,
+          [{ label: "Cancel" }, { label: "Delete link", cls: "btn-danger", run: () => persistLinks(S.links.filter((x) => x.id !== l.id), "Link deleted.") }]);
+        break;
+      }
+      case "pick-theme": applyTheme(el.dataset.theme, { save: true }); $$(".theme-card").forEach((c) => c.setAttribute("aria-checked", c.dataset.theme === el.dataset.theme)); break;
       case "profile-popout":
         if (el.dataset.who === "emi" && window.matchMedia("(min-width: 1200px)").matches && S.panel !== "profile") { S.panel = "profile"; renderPanel(); }
         else profilePopout(el, el.dataset.who);
@@ -1185,6 +1412,97 @@ window.matchMedia("(min-width: 1200px)").addEventListener("change", (e) => {
   S.panel = e.matches ? "profile" : null;
   renderPanel();
 });
+
+// ------------------------------------------------------------------ custom tooltips (replace the browser's)
+const tip = document.createElement("div");
+tip.className = "tooltip";
+tip.setAttribute("role", "tooltip");
+tip.hidden = true;
+document.body.append(tip);
+let tipFor = null, tipTimer = null;
+function showTip(el) {
+  const text = el.dataset.tip;
+  if (!text || matchMedia("(hover: none)").matches) return;
+  tipFor = el;
+  tip.textContent = text;
+  tip.hidden = false;
+  tip.dataset.side = "top";
+  const r = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let x, y;
+  if (el.dataset.tipSide === "right" && r.right + tw + 12 < innerWidth) {
+    tip.dataset.side = "right";
+    x = r.right + 10; y = r.top + r.height / 2 - th / 2;
+  } else {
+    x = r.left + r.width / 2 - tw / 2; y = r.top - th - 8;
+    if (y < 6) { y = r.bottom + 8; tip.dataset.side = "bottom"; }
+  }
+  tip.style.left = `${Math.max(6, Math.min(x, innerWidth - tw - 6))}px`;
+  tip.style.top = `${y}px`;
+  tip.style.setProperty("--arrow-x", `${r.left + r.width / 2 - Math.max(6, Math.min(x, innerWidth - tw - 6))}px`);
+}
+function hideTip() { clearTimeout(tipTimer); tip.hidden = true; tipFor = null; }
+document.addEventListener("pointerover", (e) => {
+  const el = e.target.closest?.("[data-tip]");
+  if (el === tipFor) return;
+  hideTip();
+  if (el) tipTimer = setTimeout(() => showTip(el), el.closest(".msg-tools, .ch-tools, .userpanel") ? 120 : 450);
+});
+document.addEventListener("focusin", (e) => { const el = e.target.closest?.("[data-tip]"); if (el && e.target.matches(":focus-visible")) showTip(el); });
+["focusout", "pointerdown", "scroll", "keydown"].forEach((ev) => document.addEventListener(ev, hideTip, true));
+
+// ------------------------------------------------------------------ right-click menus (replace the browser's)
+document.addEventListener("contextmenu", (e) => {
+  if (!S.booted || e.target.closest("input, textarea, .modal") || window.getSelection()?.toString()) return;
+  const msg = e.target.closest(".msg");
+  const link = e.target.closest(".sb-link");
+  if (msg && +msg.dataset.id > 0) { e.preventDefault(); moreMenu({ x: e.clientX, y: e.clientY }, +msg.dataset.id); return; }
+  if (link) { e.preventDefault(); linkMenu({ x: e.clientX, y: e.clientY }, link.dataset.linkId); return; }
+  if (e.target.closest(".app")) e.preventDefault();
+});
+
+// ------------------------------------------------------------------ swipe from the left edge to open the sidebar
+(() => {
+  let start = null, dx = 0, mode = null;
+  const narrow = () => matchMedia("(max-width: 1023px)").matches;
+  document.addEventListener("touchstart", (e) => {
+    const app = $(".app");
+    if (!app || !narrow() || e.touches.length !== 1 || $("#layer")?.children.length) return;
+    const t = e.touches[0];
+    const open = app.classList.contains("sidebar-open");
+    if (!open && t.clientX > 32) return;          // only from the left edge when closed
+    start = { x: t.clientX, y: t.clientY, open };
+    dx = 0; mode = null;
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!start) return;
+    const t = e.touches[0];
+    const mx = t.clientX - start.x, my = t.clientY - start.y;
+    if (!mode) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;
+      mode = Math.abs(mx) > Math.abs(my) * 1.3 ? "drag" : "scroll";
+      if (mode === "drag") $(".app").classList.add("dragging-drawer");
+    }
+    if (mode !== "drag") return;
+    const sb = $(".sidebar"), w = sb.offsetWidth;
+    dx = mx;
+    const pos = start.open ? Math.min(0, mx) : Math.min(0, -w + Math.max(0, mx));
+    sb.style.transform = `translateX(${pos}px)`;
+    $(".scrim").style.opacity = String(1 + pos / w);
+  }, { passive: true });
+  document.addEventListener("touchend", () => {
+    if (!start) return;
+    const app = $(".app"), sb = $(".sidebar");
+    if (mode === "drag") {
+      app.classList.remove("dragging-drawer");
+      sb.style.transform = "";
+      $(".scrim").style.opacity = "";
+      const w = sb.offsetWidth;
+      if (start.open) app.classList.toggle("sidebar-open", dx > -w * 0.3);
+      else app.classList.toggle("sidebar-open", dx > Math.min(80, w * 0.3));
+    }
+    start = null; mode = null;
+  });
+})();
 
 // ------------------------------------------------------------------ start
 if (api.hasSession()) boot();
