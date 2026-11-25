@@ -42,6 +42,17 @@ add("emi", "do you want another one, maybe something with friction or weight, to
 add("xiaole", "can we look at some friction things?", now - 14 * min);
 add("emi", "sure, let's do a basic friction one", now - 13 * min);
 add("emi", "a 5 kg crate sits on a horizontal surface. the coefficient of kinetic friction μk is 0.3. a 20 N horizontal push is applied.\nwhat's the acceleration of the crate?", now - 13 * min + 4000);
+// a fake 2-second voice note (soft tone) so the voice player can be tested in mock mode
+(() => {
+  const rate = 8000, n = rate * 2, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVEfmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.sin(i / rate * 2 * Math.PI * 440) * 3000 * Math.sin(i / n * Math.PI), true);
+  files.set(99, new Blob([buf], { type: "audio/wav" }));
+})();
+add("emi", "", now - 11.5 * min, { attachments: [{ id: 99, type: "audio/wav", size: 32044 }] });
 state.last_read_id = id;
 add("emi", "first, find the friction force: f = μk · mg\nthen net force = push − friction\nfinally, a = net / m.\nwhat do you get for the friction force?", now - 12 * min);
 add("emi", "", now - 11 * min, { sticker: "emi_hm" });

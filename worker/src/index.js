@@ -121,6 +121,8 @@ async function route(req, env, url) {
     if (p === "/bot/delete" && m === "POST") return botDelete(req, env);
     if (p === "/bot/react" && m === "POST") return botReact(req, env);
     if (p === "/bot/state" && m === "POST") return botState(req, env);
+    if (p === "/bot/image" && m === "POST") return botImage(req, env);
+    if (p === "/bot/tts" && m === "POST") return botTts(req, env);
     let mm;
     if ((mm = p.match(/^\/bot\/files\/(\d+)$/)) && m === "GET") return getFile(env, +mm[1]);
   }
@@ -639,6 +641,35 @@ async function botReact(req, env) {
   if (!id) return json({ ok: false });
   await applyReaction(env, id, b.key, b.by === "xiaole" ? "xiaole" : "emi", b.on !== false);
   return json({ ok: true });
+}
+
+// ------------------------------------------------------------------ Workers AI (images + voice) for the bot
+
+async function streamToBytes(stream) {
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function botImage(req, env) {
+  const b = await body(req);
+  const prompt = String(b.prompt || "").slice(0, 2000);
+  if (!prompt.trim()) throw new HttpError(400, "Missing prompt");
+  const out = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", { prompt, steps: 6 });
+  const bytes = out && out.image ? b64ToBytes(out.image) : out instanceof ReadableStream ? await streamToBytes(out) : null;
+  if (!bytes || !bytes.length) throw new HttpError(502, "The image model returned nothing");
+  return new Response(bytes, { headers: { "content-type": "image/jpeg" } });
+}
+
+async function botTts(req, env) {
+  const b = await body(req);
+  const text = String(b.text || "").slice(0, 600);
+  if (!text.trim()) throw new HttpError(400, "Missing text");
+  const out = await env.AI.run("@cf/deepgram/aura-2-en", { text, speaker: String(b.voice || "luna"), encoding: "mp3" }, { returnRawResponse: false });
+  let bytes = null;
+  if (out instanceof ReadableStream) bytes = await streamToBytes(out);
+  else if (out instanceof ArrayBuffer) bytes = new Uint8Array(out);
+  else if (out && out.audio) bytes = b64ToBytes(out.audio);
+  if (!bytes || !bytes.length) throw new HttpError(502, "The voice model returned nothing");
+  return new Response(bytes, { headers: { "content-type": "audio/mpeg" } });
 }
 
 async function botState(req, env) {

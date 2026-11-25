@@ -451,8 +451,17 @@ function reactionsHtml(m) {
 function attachmentsHtml(m) {
   let out = "";
   if (m.sticker) out += `<img class="sticker" src="assets/${m.sticker}.png" alt="${STICKER_LABEL[m.sticker]} sticker">`;
-  if (m.attachments?.length) {
-    out += `<div class="attachments n${Math.min(m.attachments.length, 4)}">` + m.attachments.map((a) =>
+  for (const a of (m.attachments || []).filter((x) => (x.type || "").startsWith("audio/"))) {
+    let seed = a.id * 9301 + 49297;
+    const bars = Array.from({ length: 32 }, () => { seed = (seed * 9301 + 49297) % 233280; return 25 + Math.round((seed / 233280) * 75); });
+    out += `<div class="voice" data-voice="${a.id}">
+      <button class="voice-play" data-act="voice-play" data-file="${a.id}" aria-label="Play voice message">${icon("play", { size: 18 })}</button>
+      <span class="voice-wave" aria-hidden="true">${bars.map((hgt, i) => `<i style="height:${hgt}%" data-i="${i}"></i>`).join("")}</span>
+      <span class="voice-time" data-voice-time>voice</span></div>`;
+  }
+  const pics = (m.attachments || []).filter((x) => !(x.type || "").startsWith("audio/"));
+  if (pics.length) {
+    out += `<div class="attachments n${Math.min(pics.length, 4)}">` + pics.map((a) =>
       a.local ? `<img class="att" src="${a.local}" alt="">`
         : `<button class="att-btn" data-act="lightbox" data-file="${a.id}"><img class="att" data-file-src="${a.id}" alt="Image"></button>`).join("") + "</div>";
   }
@@ -809,6 +818,42 @@ function pingTyping() {
   if (Date.now() - lastTypingPing > 4000) { lastTypingPing = Date.now(); api.typing(); }
 }
 
+// ------------------------------------------------------------------ voice note player (custom, no native controls)
+const voices = new Map(); // file id -> Audio
+let playingVoice = null;
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+async function toggleVoice(btn) {
+  const id = +btn.dataset.file;
+  const paint = () => {
+    const a = voices.get(id);
+    // Re-find the player each time (messages re-render while it plays).
+    const box = document.querySelector(`.voice[data-voice="${id}"]`);
+    if (!box || !a) return;
+    const p = a.duration ? a.currentTime / a.duration : 0;
+    box.style.setProperty("--p", p);
+    box.classList.toggle("playing", !a.paused);
+    $$(".voice-wave i", box).forEach((bar, i, all) => bar.classList.toggle("on", i / all.length < p));
+    $(".voice-play", box).innerHTML = icon(a.paused ? "play" : "pause", { size: 18 });
+    $("[data-voice-time]", box).textContent = a.paused && !a.currentTime ? fmtTime(a.duration || 0) : fmtTime(a.currentTime);
+  };
+  let audio = voices.get(id);
+  if (!audio) {
+    btn.classList.add("loading");
+    try {
+      audio = new Audio(await api.fileUrl(id));
+    } catch { btn.classList.remove("loading"); return toast("Couldn't load that voice message."); }
+    btn.classList.remove("loading");
+    voices.set(id, audio);
+    ["timeupdate", "play", "pause", "loadedmetadata"].forEach((ev) => audio.addEventListener(ev, paint));
+    audio.addEventListener("ended", () => { audio.currentTime = 0; paint(); });
+  }
+  if (playingVoice && playingVoice !== audio) playingVoice.pause();
+  if (audio.paused) { voice.stopSpeaking(); audio.play().catch(() => toast("Tap again to play.")); playingVoice = audio; }
+  else audio.pause();
+  paint();
+}
+
 // ------------------------------------------------------------------ slash commands (type "/" for the picker)
 // Same commands as emi's "!" commands; the bot accepts either prefix.
 const COMMANDS = [
@@ -818,6 +863,15 @@ const COMMANDS = [
   { name: "forget", args: "number", desc: "Remove one memory (numbers come from /memories)" },
   { name: "quiz", args: "topic", opt: "count", desc: "Start practice problems on a topic" },
   { name: "quiz stop", desc: "End the practice quiz" },
+  { name: "picture", args: "idea", desc: "emi makes a picture or notebook-style study page" },
+  { name: "flashcards", args: "topic", opt: "count", desc: "Make a deck and start reviewing" },
+  { name: "flashcards review", desc: "Review the cards that are due today", insert: "flashcards" },
+  { name: "flashcards list", desc: "See your decks" },
+  { name: "flashcards stop", desc: "End the flashcard review" },
+  { name: "remind", args: "when", opt: "what", desc: "emi texts you at that time (8pm, in 30 min, tomorrow 7am)" },
+  { name: "remind list", desc: "See your reminders" },
+  { name: "focus", opt: "minutes", desc: "Study timer: emi stays quiet, then checks in" },
+  { name: "focus stop", desc: "End the study timer" },
   { name: "sheet", args: "topic", desc: "Get a formula sheet image" },
   { name: "grades", desc: "See the grades emi saved" },
   { name: "birthday", args: "MM-DD", desc: "Tell emi your birthday" },
@@ -873,7 +927,7 @@ function updateCmdMenu(input) {
 
 function pickCommand(c, input, form, { sendIfDone }) {
   const needsMore = c.args || c.opt;
-  input.value = `/${c.name}${needsMore ? " " : ""}`;
+  input.value = `/${c.insert || c.name}${needsMore ? " " : ""}`;
   autoGrow(input);
   input.focus();
   input.setSelectionRange(input.value.length, input.value.length);
@@ -1488,6 +1542,7 @@ function bindShell(app) {
       case "pin": closeLayer(); togglePin(id); break;
       case "speak": closeLayer(); voice.speak(S.msgs.get(id)?.text || "", settings); break;
       case "delete": closeLayer(); confirmDelete(id); break;
+      case "voice-play": toggleVoice(el); break;
       case "lightbox": {
         const url = await api.fileUrl(+el.dataset.file);
         const box = modal(`<img class="lightbox-img" src="${url}" alt=""><a class="lightbox-open" href="${url}" target="_blank" rel="noopener">Open original</a>`, [], { cls: "modal-lightbox" });

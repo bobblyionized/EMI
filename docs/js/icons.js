@@ -38,6 +38,8 @@ const P = {
   envelope: `<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M4 7l8 6 8-6"/>`,
   lock: `<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/><path d="M12 14.5v2.5"/>`,
   wave: `<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2M21 12h0"/>`,
+  play: `<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>`,
+  pause: `<rect x="7" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/>`,
   slash: `<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M14.5 7.5l-5 9"/>`,
   external: `<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>`,
   history: `<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4.5V8h3.5"/><path d="M12 8v4.5l3 2"/>`,
