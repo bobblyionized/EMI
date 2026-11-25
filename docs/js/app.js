@@ -600,7 +600,7 @@ function stopSync() {
   clearTimeout(syncTimer);
   syncAbort?.abort();
 }
-function startSync() {
+function startSync(firstDelay = 1500) {
   stopSync();
   const tick = async () => {
     syncAbort = new AbortController();
@@ -623,9 +623,9 @@ function startSync() {
     } catch (e) {
       if (e.name !== "AbortError" && e.status !== 401) setConnection(false);
     }
-    if (api.hasSession()) syncTimer = setTimeout(tick, document.hidden ? 10000 : 2000);
+    if (api.hasSession()) syncTimer = setTimeout(tick, syncInterval());
   };
-  syncTimer = setTimeout(tick, 1500);
+  syncTimer = setTimeout(tick, firstDelay);
 }
 
 let offlineToast = null;
@@ -636,6 +636,7 @@ function setConnection(ok) {
 
 function onNewMessages(fresh) {
   setConnection(true);
+  if (fresh.length) markActive();
   const fromEmi = fresh.filter((m) => m.author !== "xiaole" && !m.deleted);
   if (!fromEmi.length) return;
   const away = document.hidden || !S.atBottom;
@@ -766,6 +767,8 @@ async function sendMessage({ text = "", sticker = null } = {}) {
     const ids = [];
     for (const f of files) ids.push((await api.upload(await compress(f.file))).id);
     const { message } = await api.send({ text, sticker, reply_to: reply?.id || null, attachments: ids });
+    markActive();
+    syncSoon(1500);
     S.msgs.delete(tmp.id);
     upsert([message]);
     renderMessages();
@@ -813,8 +816,23 @@ function autoGrow(t) {
   t.style.height = Math.min(t.scrollHeight, isPhone() ? 140 : 300) + "px";
 }
 
+// Check for new messages fast while you're chatting, slower when idle (keeps the free Cloudflare quota safe).
+let lastActive = Date.now();
+const markActive = () => { lastActive = Date.now(); };
+function syncInterval() {
+  if (document.hidden) return 12000;
+  const emiTyping = (S.server.emi_typing_until || 0) > Date.now() + S.clockSkew;
+  return emiTyping || Date.now() - lastActive < 3 * 60000 ? 1000 : 3500;
+}
+function syncSoon(ms = 400) {
+  clearTimeout(syncTimer);
+  syncAbort?.abort();
+  syncTimer = setTimeout(() => startSync(0), ms);
+}
+
 let lastTypingPing = 0;
 function pingTyping() {
+  markActive();
   if (Date.now() - lastTypingPing > 4000) { lastTypingPing = Date.now(); api.typing(); }
 }
 
